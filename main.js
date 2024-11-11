@@ -1,26 +1,88 @@
 
 const express = require('express');
-const { Command } = require('commander');
+const path = require('path');
+const { program } = require("commander");
 
-const program = new Command();
+const app = express();
+const notes = {};
+
+// Налаштування параметрів командного рядка
 program
   .requiredOption('-h, --host <host>', 'адреса сервера')
   .requiredOption('-p, --port <port>', 'порт сервера')
-  .requiredOption('-c, --cache <path>', 'шлях до директорії з кешованими файлами');
+  .requiredOption('-c, --cache <cache>', 'шлях до кешу директорії');
 
 program.parse(process.argv);
-const options = program.opts();
+const { host, port, cache } = program.opts();
 
-if (!options.host || !options.port || !options.cache) {
-  console.error('Помилка: необхідні параметри не задані');
-  process.exit(1);
-}
+// Налаштування мідлверів для обробки JSON і form-urlencoded даних
+app.use(express.urlencoded({ extended: true }));
+app.use(express.json());
 
-const app = express();
+// Маршрути для обробки запитів
 
-app.get('/', (req, res) => {
+// Повернення HTML форми для завантаження нотаток
+app.get('/UploadForm.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'UploadForm.html'));
 });
 
-app.listen(options.port, options.host, () => {
-  console.log(`Сервер запущено на http://${options.host}:${options.port}`)
+// Тестовий маршрут для перевірки запуску сервера
+app.get('/', (req, res) => {
+  res.send('Сервер працює!');
+});
+
+// Отримання всіх нотаток
+app.get('/notes', (req, res) => {
+  const notesList = Object.keys(notes).map(name => ({
+    name,
+    text: notes[name],
+  }));
+  res.status(200).json(notesList);
+});
+
+// Отримання конкретної нотатки
+app.get('/notes/:noteName', (req, res) => {
+  const noteName = req.params.noteName;
+  if (notes[noteName]) {
+    res.status(200).send(notes[noteName]);
+  } else {
+    res.status(404).send('Not found');
+  }
+});
+
+// Оновлення тексту нотатки
+app.put('/notes/:noteName', (req, res) => {
+  const noteName = req.params.noteName;
+  if (notes[noteName]) {
+    notes[noteName] = req.body.note;
+    res.status(200).send('Note updated');
+  } else {
+    res.status(404).send('Not found');
+  }
+});
+
+// Видалення нотатки
+app.delete('/notes/:noteName', (req, res) => {
+  const noteName = req.params.noteName;
+  if (notes[noteName]) {
+    delete notes[noteName];
+    res.status(200).send('Note deleted');
+  } else {
+    res.status(404).send('Not found');
+  }
+});
+
+// Створення нової нотатки
+app.post('/write', (req, res) => {
+  const { note_name, note } = req.body;
+  if (notes[note_name]) {
+    return res.status(400).send('Note already exists');
+  }
+  notes[note_name] = note;
+  res.status(201).send('Note created');
+});
+
+// Запуск сервера
+app.listen(port, host, () => {
+  console.log(`Сервер запущено на http://${host}:${port}`);
 });
